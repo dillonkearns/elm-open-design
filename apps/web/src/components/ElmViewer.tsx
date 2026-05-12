@@ -135,7 +135,7 @@ function HighlightedElm({ source }: { source: string }) {
   );
 }
 
-type CompileState =
+export type CompileState =
   | { kind: 'loading-source' }
   | { kind: 'compiling' }
   | { kind: 'rendered'; srcDoc: string }
@@ -147,6 +147,75 @@ interface ElmCompileResponse {
   errors?: unknown;
   raw?: string;
   error?: string;
+}
+
+/**
+ * Fetch an Elm source file from the project, POST it to /api/elm/compile, and
+ * produce an iframe-ready `srcDoc`. Used by the full ElmViewer (preview tab)
+ * and by DesignFilesPanel's right-side preview thumb so both stay in lockstep
+ * with the same compile pipeline, cache, and error rendering.
+ */
+export function useCompiledElm(
+  projectId: string,
+  fileName: string,
+  fileMtime: number,
+  reloadKey: number = 0,
+): { state: CompileState; source: string | null } {
+  const [source, setSource] = useState<string | null>(null);
+  const [state, setState] = useState<CompileState>({ kind: 'loading-source' });
+
+  useEffect(() => {
+    setSource(null);
+    setState({ kind: 'loading-source' });
+    let cancelled = false;
+    void fetchProjectFileText(projectId, fileName).then((text) => {
+      if (!cancelled) setSource(text ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, fileName, fileMtime, reloadKey]);
+
+  useEffect(() => {
+    if (source === null) return;
+    if (source.trim().length === 0) {
+      setState({ kind: 'error', raw: 'Empty Elm source.', structured: null });
+      return;
+    }
+    let cancelled = false;
+    setState({ kind: 'compiling' });
+    fetch('/api/elm/compile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    })
+      .then(async (resp) => {
+        const data = (await resp.json()) as ElmCompileResponse;
+        if (cancelled) return;
+        if (data.ok && typeof data.js === 'string') {
+          setState({ kind: 'rendered', srcDoc: buildIframeShell(data.js, fileName) });
+        } else {
+          setState({
+            kind: 'error',
+            raw: data.raw || data.error || 'Elm compile failed',
+            structured: data.errors ?? null,
+          });
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setState({
+          kind: 'error',
+          raw: `Compile request failed: ${err instanceof Error ? err.message : String(err)}`,
+          structured: null,
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [source, fileName]);
+
+  return { state, source };
 }
 
 const TAILWIND_CDN_URL = 'https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min.css';
@@ -196,64 +265,9 @@ export function ElmViewer({
   projectId: string;
   file: ProjectFile;
 }) {
-  const [source, setSource] = useState<string | null>(null);
-  const [state, setState] = useState<CompileState>({ kind: 'loading-source' });
   const [reloadKey, setReloadKey] = useState(0);
   const [mode, setMode] = useState<'preview' | 'source'>('preview');
-
-  useEffect(() => {
-    setSource(null);
-    setState({ kind: 'loading-source' });
-    let cancelled = false;
-    void fetchProjectFileText(projectId, file.name).then((text) => {
-      if (!cancelled) setSource(text ?? '');
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, file.name, file.mtime, reloadKey]);
-
-  useEffect(() => {
-    if (source === null) return;
-    if (source.trim().length === 0) {
-      setState({ kind: 'error', raw: 'Empty Elm source.', structured: null });
-      return;
-    }
-    let cancelled = false;
-    setState({ kind: 'compiling' });
-    fetch('/api/elm/compile', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
-    })
-      .then(async (resp) => {
-        const data = (await resp.json()) as ElmCompileResponse;
-        if (cancelled) return;
-        if (data.ok && typeof data.js === 'string') {
-          setState({
-            kind: 'rendered',
-            srcDoc: buildIframeShell(data.js, file.name),
-          });
-        } else {
-          setState({
-            kind: 'error',
-            raw: data.raw || data.error || 'Elm compile failed',
-            structured: data.errors ?? null,
-          });
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setState({
-          kind: 'error',
-          raw: `Compile request failed: ${err instanceof Error ? err.message : String(err)}`,
-          structured: null,
-        });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [source, file.name]);
+  const { state, source } = useCompiledElm(projectId, file.name, file.mtime, reloadKey);
 
   const formattedError = useMemo(() => {
     if (state.kind !== 'error') return null;
@@ -349,6 +363,68 @@ export function ElmViewer({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Thumbnail-sized Elm renderer used by DesignFilesPanel's right-side preview
+ * pane. Shares the same compile pipeline as the full ElmViewer via
+ * useCompiledElm, so cache hits are free and the iframe matches what the
+ * user sees when they open the file as a tab.
+ */
+export function ElmThumb({
+  projectId,
+  file,
+}: {
+  projectId: string;
+  file: ProjectFile;
+}) {
+  const { state } = useCompiledElm(projectId, file.name, file.mtime);
+  if (state.kind === 'rendered') {
+    return (
+      <iframe
+        title={file.name}
+        sandbox="allow-scripts"
+        srcDoc={state.srcDoc}
+        style={{ width: '100%', height: '100%', border: 0, background: '#fff' }}
+      />
+    );
+  }
+  if (state.kind === 'error') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          color: '#fecaca',
+          background: '#1a0b0b',
+          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+          fontSize: 11,
+          textAlign: 'center',
+        }}
+      >
+        Elm compile error — open file for details
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--text-faint)',
+        fontSize: 13,
+      }}
+    >
+      {state.kind === 'loading-source' ? 'Loading…' : 'Compiling Elm…'}
     </div>
   );
 }

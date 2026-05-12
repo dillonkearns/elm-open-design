@@ -6,6 +6,7 @@ import type { LiveArtifactWorkspaceEntry, ProjectFile, ProjectFileKind } from '.
 import { Icon } from './Icon';
 import { LiveArtifactBadges } from './LiveArtifactBadges';
 import { isRenderableSketchJson, SketchPreview } from './SketchPreview';
+import { ElmThumb } from './ElmViewer';
 
 type TranslateFn = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -972,6 +973,8 @@ function DfPreview({
           <img src={`${url}?v=${Math.round(file.mtime)}`} alt={file.name} />
         ) : file.kind === 'html' ? (
           <iframe title={file.name} src={url} sandbox="allow-scripts" />
+        ) : /\.elm$/i.test(file.name) ? (
+          <ElmThumb projectId={projectId} file={file} />
         ) : file.kind === 'video' ? (
           <video
             src={`${url}?v=${Math.round(file.mtime)}`}
