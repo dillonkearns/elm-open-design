@@ -1,6 +1,139 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Fragment } from 'react';
 import { fetchProjectFileText } from '../providers/registry';
 import type { ProjectFile } from '../types';
+
+type TokenKind = 'comment' | 'string' | 'keyword' | 'type' | 'number' | 'plain';
+interface Token {
+  kind: TokenKind;
+  text: string;
+}
+
+const ELM_KEYWORDS = new Set([
+  'module',
+  'exposing',
+  'import',
+  'as',
+  'type',
+  'alias',
+  'port',
+  'where',
+  'let',
+  'in',
+  'if',
+  'then',
+  'else',
+  'case',
+  'of',
+  'infix',
+  'infixl',
+  'infixr',
+]);
+
+// Palenight-ish palette tuned for the #0b1020 background.
+const TOKEN_COLOR: Record<TokenKind, string> = {
+  comment: '#7f8ea3',
+  string: '#a3d977',
+  keyword: '#c792ea',
+  type: '#ffcb6b',
+  number: '#f78c6c',
+  plain: '#cbd5e1',
+};
+
+// Single-pass tokenizer. Elm syntax is simple enough that a handful of branches
+// cover the visible structure (keywords, capitalised type/constructor names,
+// strings, numbers, line + block comments). Anything unrecognised is emitted
+// as `plain` so operators and whitespace pass through unchanged.
+function tokenizeElm(src: string): Token[] {
+  const tokens: Token[] = [];
+  let pending = '';
+  const flush = () => {
+    if (pending) {
+      tokens.push({ kind: 'plain', text: pending });
+      pending = '';
+    }
+  };
+  let i = 0;
+  while (i < src.length) {
+    const ch = src[i] ?? '';
+    if (src.startsWith('--', i)) {
+      flush();
+      const nl = src.indexOf('\n', i);
+      const end = nl === -1 ? src.length : nl;
+      tokens.push({ kind: 'comment', text: src.slice(i, end) });
+      i = end;
+      continue;
+    }
+    if (src.startsWith('{-', i)) {
+      flush();
+      const closeIdx = src.indexOf('-}', i + 2);
+      const end = closeIdx === -1 ? src.length : closeIdx + 2;
+      tokens.push({ kind: 'comment', text: src.slice(i, end) });
+      i = end;
+      continue;
+    }
+    if (ch === '"') {
+      flush();
+      let j = i + 1;
+      while (j < src.length && src[j] !== '"') {
+        if (src[j] === '\\' && j + 1 < src.length) j += 2;
+        else j += 1;
+      }
+      const end = Math.min(j + 1, src.length);
+      tokens.push({ kind: 'string', text: src.slice(i, end) });
+      i = end;
+      continue;
+    }
+    if (ch >= '0' && ch <= '9') {
+      flush();
+      let j = i;
+      while (j < src.length) {
+        const c = src[j] ?? '';
+        if ((c >= '0' && c <= '9') || c === '.') j += 1;
+        else break;
+      }
+      tokens.push({ kind: 'number', text: src.slice(i, j) });
+      i = j;
+      continue;
+    }
+    if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch === '_') {
+      flush();
+      let j = i;
+      while (j < src.length) {
+        const c = src[j] ?? '';
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c === '_') j += 1;
+        else break;
+      }
+      const word = src.slice(i, j);
+      let kind: TokenKind = 'plain';
+      if (ELM_KEYWORDS.has(word)) kind = 'keyword';
+      else if (word[0] && word[0] >= 'A' && word[0] <= 'Z') kind = 'type';
+      tokens.push({ kind, text: word });
+      i = j;
+      continue;
+    }
+    pending += ch;
+    i += 1;
+  }
+  flush();
+  return tokens;
+}
+
+function HighlightedElm({ source }: { source: string }) {
+  const tokens = useMemo(() => tokenizeElm(source), [source]);
+  return (
+    <>
+      {tokens.map((token, idx) =>
+        token.kind === 'plain' ? (
+          <Fragment key={idx}>{token.text}</Fragment>
+        ) : (
+          <span key={idx} style={{ color: TOKEN_COLOR[token.kind] }}>
+            {token.text}
+          </span>
+        ),
+      )}
+    </>
+  );
+}
 
 type CompileState =
   | { kind: 'loading-source' }
@@ -178,13 +311,14 @@ export function ElmViewer({
               overflow: 'auto',
               fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
               fontSize: 12,
+              lineHeight: 1.55,
               whiteSpace: 'pre',
               background: '#0b1020',
-              color: '#cbd5e1',
+              color: TOKEN_COLOR.plain,
               height: '100%',
             }}
           >
-            {source ?? ''}
+            <HighlightedElm source={source ?? ''} />
           </pre>
         ) : state.kind === 'rendered' ? (
           <iframe
