@@ -51,6 +51,19 @@ type CompileResult = CompileSuccess | CompileFailure;
 const CACHE_MAX = 64;
 const cache = new Map<string, CompileResult>();
 
+// Serializes elm-make invocations. The shared workdir's src/Main.elm is the
+// load-bearing file `elm make` reads, so two parallel POSTs would race on the
+// write/read pair and one (or both) would see a mangled source. A simple
+// promise-chain mutex is enough — compiles are fast (~100ms after warmup) and
+// the cache already absorbs identical-source repeats.
+let compileQueue: Promise<unknown> = Promise.resolve();
+function runSerialized<T>(task: () => Promise<T>): Promise<T> {
+  const next = compileQueue.then(task, task);
+  // Don't let one rejection poison the queue for every later compile.
+  compileQueue = next.catch(() => undefined);
+  return next;
+}
+
 function rememberCacheEntry(key: string, value: CompileResult) {
   if (cache.has(key)) cache.delete(key);
   cache.set(key, value);
@@ -142,7 +155,7 @@ export function registerElmRoutes(app: Express, deps: RegisterElmRoutesDeps): vo
       return;
     }
     try {
-      const result = await compileElm(workdir, source);
+      const result = await runSerialized(() => compileElm(workdir, source));
       rememberCacheEntry(key, result);
       res.json(result);
     } catch (err) {
