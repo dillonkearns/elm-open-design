@@ -64,6 +64,17 @@ export const ReactComponentRenderer: ArtifactRenderer = {
   },
 };
 
+export const ElmRenderer: ArtifactRenderer = {
+  id: 'elm',
+  supportsStreaming: false,
+  canRender: ({ file }) => {
+    const manifest = resolveManifest(file);
+    if (!manifest) return false;
+    if (manifest.kind === 'elm-prototype' || manifest.renderer === 'elm') return true;
+    return /\.elm$/i.test(file.name);
+  },
+};
+
 export const MarkdownRenderer: ArtifactRenderer = {
   id: 'markdown',
   supportsStreaming: true,
@@ -101,6 +112,7 @@ export class RendererRegistry {
 
 export const artifactRendererRegistry = new RendererRegistry([
   ReactComponentRenderer,
+  ElmRenderer,
   DeckHtmlRenderer,
   HtmlRenderer,
   MarkdownRenderer,

@@ -231,6 +231,7 @@ import { registerConnectorRoutes } from './connectors/routes.js';
 import { registerActiveContextRoutes } from './active-context-routes.js';
 import { registerMcpRoutes } from './mcp-routes.js';
 import { registerLiveArtifactRoutes } from './live-artifact-routes.js';
+import { registerElmRoutes } from './elm-routes.js';
 import { registerDeployRoutes, registerDeploymentCheckRoutes } from './deploy-routes.js';
 import { registerMediaRoutes } from './media-routes.js';
 import { registerProjectRoutes, registerProjectArtifactRoutes, registerProjectFileRoutes, registerProjectUploadRoutes } from './project-routes.js';
@@ -2860,6 +2861,7 @@ export async function startServer({
     liveArtifacts: liveArtifactDeps,
     projectStore: projectStoreDeps,
   });
+  registerElmRoutes(app, { runtimeDataDir: RUNTIME_DATA_DIR });
   app.use('/artifacts', express.static(ARTIFACTS_DIR));
   registerDeployRoutes(app, {
     db,

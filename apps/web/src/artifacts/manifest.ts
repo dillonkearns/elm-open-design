@@ -11,6 +11,7 @@ const ALLOWED_KINDS: ReadonlySet<ArtifactKind> = new Set([
   'html',
   'deck',
   'react-component',
+  'elm-prototype',
   'markdown-document',
   'svg',
   'diagram',
@@ -22,6 +23,7 @@ const ALLOWED_RENDERERS: ReadonlySet<ArtifactRendererId> = new Set([
   'html',
   'deck-html',
   'react-component',
+  'elm',
   'markdown',
   'svg',
   'diagram',
@@ -35,6 +37,7 @@ const ALLOWED_EXPORTS: ReadonlySet<ArtifactExportKind> = new Set([
   'zip',
   'pptx',
   'jsx',
+  'elm',
   'md',
   'svg',
   'txt',
@@ -52,6 +55,7 @@ function inferKindFromEntry(entry: string): ArtifactKind | null {
   if (ext === '.svg') return 'svg';
   if (ext === '.md') return 'markdown-document';
   if (['.jsx', '.tsx'].includes(ext)) return 'react-component';
+  if (ext === '.elm') return 'elm-prototype';
   if (['.js', '.ts', '.json', '.css'].includes(ext)) return 'code-snippet';
   return null;
 }
@@ -59,6 +63,7 @@ function inferKindFromEntry(entry: string): ArtifactKind | null {
 function exportsForKind(kind: ArtifactKind): ArtifactExportKind[] {
   if (kind === 'deck') return ['html', 'pdf', 'pptx', 'zip'];
   if (kind === 'react-component') return ['jsx', 'html', 'zip'];
+  if (kind === 'elm-prototype') return ['elm', 'html', 'zip'];
   if (kind === 'markdown-document') return ['md', 'html', 'pdf', 'zip'];
   if (kind === 'svg' || kind === 'diagram') return ['svg', 'zip'];
   if (kind === 'code-snippet') return ['txt', 'zip'];
@@ -164,11 +169,13 @@ export function inferLegacyManifest(input: {
           ? 'markdown'
           : kind === 'react-component'
             ? 'react-component'
-            : kind === 'code-snippet'
-              ? 'code'
-              : kind === 'deck'
-                ? 'deck-html'
-                : kind;
+            : kind === 'elm-prototype'
+              ? 'elm'
+              : kind === 'code-snippet'
+                ? 'code'
+                : kind === 'deck'
+                  ? 'deck-html'
+                  : kind;
   const resolvedKind = isDeck ? 'deck' : kind;
   return {
     version: MANIFEST_VERSION,

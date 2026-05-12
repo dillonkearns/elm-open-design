@@ -2610,9 +2610,10 @@ export function ProjectView({
   );
 }
 
-function artifactExtensionFor(art: Artifact): '.html' | '.jsx' | '.tsx' {
+function artifactExtensionFor(art: Artifact): '.html' | '.jsx' | '.tsx' | '.elm' {
   const type = (art.artifactType || '').toLowerCase();
   const identifier = (art.identifier || '').toLowerCase();
+  if (type.includes('elm') || identifier.endsWith('.elm')) return '.elm';
   if (type.includes('tsx') || identifier.endsWith('.tsx')) return '.tsx';
   if (type.includes('jsx') || type.includes('react') || identifier.endsWith('.jsx')) {
     return '.jsx';

@@ -46,6 +46,7 @@ import {
 } from '../runtime/exports';
 import { buildReactComponentSrcdoc } from '../runtime/react-component';
 import { buildSrcdoc } from '../runtime/srcdoc';
+import { ElmViewer } from './ElmViewer';
 import { parseForceInline, shouldUrlLoadHtmlPreview } from './file-viewer-render-mode';
 import { saveTemplate } from '../state/projects';
 import type {
@@ -477,6 +478,9 @@ export function FileViewer({
   }
   if (rendererMatch?.renderer.id === 'react-component') {
     return <ReactComponentViewer projectId={projectId} file={file} />;
+  }
+  if (rendererMatch?.renderer.id === 'elm') {
+    return <ElmViewer projectId={projectId} file={file} />;
   }
   if (rendererMatch?.renderer.id === 'markdown') {
     return <MarkdownViewer projectId={projectId} file={file} />;

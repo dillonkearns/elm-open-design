@@ -1059,6 +1059,7 @@ const EXT_MIME = {
   // type="text/babel" src="…">`) need a JS-family Content-Type for the
   // browser fetch to succeed. Upstream of issue #336.
   '.tsx': 'text/javascript; charset=utf-8',
+  '.elm': 'text/plain; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.md': 'text/markdown; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
@@ -1191,7 +1192,7 @@ export function kindFor(name) {
   if (['.mp4', '.mov', '.webm'].includes(ext)) return 'video';
   if (['.mp3', '.wav', '.m4a'].includes(ext)) return 'audio';
   if (['.md', '.txt'].includes(ext)) return 'text';
-  if (['.js', '.mjs', '.cjs', '.ts', '.tsx', '.json', '.css', '.py'].includes(ext)) {
+  if (['.js', '.mjs', '.cjs', '.ts', '.tsx', '.json', '.css', '.py', '.elm'].includes(ext)) {
     return 'code';
   }
   if (ext === '.pdf') return 'pdf';

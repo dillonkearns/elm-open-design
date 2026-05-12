@@ -2,6 +2,7 @@ export type ArtifactKind =
   | 'html'
   | 'deck'
   | 'react-component'
+  | 'elm-prototype'
   | 'markdown-document'
   | 'svg'
   | 'diagram'
@@ -13,6 +14,7 @@ export type ArtifactRendererId =
   | 'html'
   | 'deck-html'
   | 'react-component'
+  | 'elm'
   | 'markdown'
   | 'svg'
   | 'diagram'
@@ -26,6 +28,7 @@ export type ArtifactExportKind =
   | 'zip'
   | 'pptx'
   | 'jsx'
+  | 'elm'
   | 'md'
   | 'svg'
   | 'txt';

@@ -4,6 +4,7 @@ export type ArtifactKind =
   | 'html'
   | 'deck'
   | 'react-component'
+  | 'elm-prototype'
   | 'markdown-document'
   | 'svg'
   | 'diagram'
@@ -15,6 +16,7 @@ export type ArtifactRendererId =
   | 'html'
   | 'deck-html'
   | 'react-component'
+  | 'elm'
   | 'markdown'
   | 'svg'
   | 'diagram'
@@ -22,7 +24,7 @@ export type ArtifactRendererId =
   | 'mini-app'
   | 'design-system';
 
-export type ArtifactExportKind = 'html' | 'pdf' | 'zip' | 'pptx' | 'jsx' | 'md' | 'svg' | 'txt';
+export type ArtifactExportKind = 'html' | 'pdf' | 'zip' | 'pptx' | 'jsx' | 'elm' | 'md' | 'svg' | 'txt';
 
 export type ArtifactStatus = 'streaming' | 'complete' | 'error';
 
