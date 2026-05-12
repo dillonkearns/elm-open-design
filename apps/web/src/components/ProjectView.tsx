@@ -1419,10 +1419,21 @@ export function ProjectView({
         }
       };
 
+      // Track the in-flight artifact's metadata across start → chunk → end so
+      // artifact:end can persist immediately. Without this, multi-artifact
+      // turns (e.g. the Elm skill emitting three variants in one reply) drop
+      // all but the last because the single `artifact` React state gets
+      // overwritten by each start before any persist runs.
+      let pendingArtifact: { identifier: string; artifactType: string; title: string } | null = null;
       const applyContentDelta = (delta: string) => {
         for (const ev of parser.feed(delta)) {
           if (ev.type === 'artifact:start') {
             liveHtml = '';
+            pendingArtifact = {
+              identifier: ev.identifier,
+              artifactType: ev.artifactType,
+              title: ev.title,
+            };
             setArtifact({
               identifier: ev.identifier,
               artifactType: ev.artifactType,
@@ -1441,7 +1452,16 @@ export function ProjectView({
                   },
             );
           } else if (ev.type === 'artifact:end') {
-            setArtifact((prev) => (prev ? { ...prev, html: ev.fullContent } : null));
+            const completed: Artifact = {
+              identifier: pendingArtifact?.identifier ?? ev.identifier,
+              artifactType: pendingArtifact?.artifactType ?? '',
+              title: pendingArtifact?.title ?? '',
+              html: ev.fullContent,
+            };
+            pendingArtifact = null;
+            liveHtml = '';
+            setArtifact(completed);
+            void persistArtifact(completed);
           }
         }
       };
@@ -1472,7 +1492,15 @@ export function ProjectView({
           cancelSendTextBuffer();
           for (const ev of parser.flush()) {
             if (ev.type === 'artifact:end') {
-              setArtifact((prev) => (prev ? { ...prev, html: ev.fullContent } : null));
+              const completed: Artifact = {
+                identifier: pendingArtifact?.identifier ?? ev.identifier,
+                artifactType: pendingArtifact?.artifactType ?? '',
+                title: pendingArtifact?.title ?? '',
+                html: ev.fullContent,
+              };
+              pendingArtifact = null;
+              setArtifact(completed);
+              void persistArtifact(completed);
             }
           }
           const emptyApiResponse =
@@ -1518,13 +1546,10 @@ export function ProjectView({
           setStreaming(false);
           abortRef.current = null;
           cancelRef.current = null;
-          // Persist the finished artifact to the project folder so it shows
-          // up as a real tab (not just the synthetic "live" stream).
-          setArtifact((prev) => {
-            if (!prev || !prev.html) return prev;
-            void persistArtifact(prev);
-            return prev;
-          });
+          // Persistence is now driven by each `artifact:end` event in
+          // applyContentDelta / parser.flush above, so this onDone hook just
+          // needs to refresh the project file list to surface any artifacts
+          // that landed during the stream.
           // Refetch the file list directly (rather than just bumping the
           // refresh signal) so we can diff against the pre-turn snapshot
           // and attach the new files to the assistant message as download

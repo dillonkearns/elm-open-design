@@ -6,7 +6,7 @@ import {
   splitOnQuestionForms,
   type QuestionForm,
 } from "../artifacts/question-form";
-import { stripArtifact } from "../artifacts/strip";
+import { stripAllArtifacts } from "../artifacts/strip";
 import { QuestionFormView, parseSubmittedAnswers } from "./QuestionForm";
 import { Icon } from "./Icon";
 import { useT } from "../i18n";
@@ -775,7 +775,7 @@ function ProseBlock({
   locallySubmitted: Set<string>;
   onSubmitForm: (formId: string, text: string) => void;
 }) {
-  const cleaned = useMemo(() => stripArtifact(text), [text]);
+  const cleaned = useMemo(() => stripAllArtifacts(text), [text]);
   const segments = useMemo(() => splitOnQuestionForms(cleaned), [cleaned]);
   // Each text segment is further split on `<system-reminder>` blocks so
   // those render as their own collapsible chip instead of raw markup.

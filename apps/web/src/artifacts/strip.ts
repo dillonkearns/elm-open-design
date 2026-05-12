@@ -63,3 +63,21 @@ export function stripArtifact(content: string): string {
   if (end === -1) return content;
   return (content.slice(0, open) + content.slice(end + CLOSE.length)).trim();
 }
+
+/**
+ * Like {@link stripArtifact} but removes every real `<artifact …>…</artifact>`
+ * block. Multi-artifact assistant turns (e.g. the Elm prototype skill emitting
+ * three variants in one reply) would otherwise leave the second and third
+ * tags as literal text in the rendered chat. Loops until a strip pass no
+ * longer changes the content so trailing artifacts are caught.
+ */
+export function stripAllArtifacts(content: string): string {
+  let current = content;
+  // Bound the loop so a pathological input can't spin forever.
+  for (let i = 0; i < 64; i++) {
+    const next = stripArtifact(current);
+    if (next === current) return current;
+    current = next;
+  }
+  return current;
+}
