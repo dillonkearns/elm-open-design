@@ -2861,7 +2861,7 @@ export async function startServer({
     liveArtifacts: liveArtifactDeps,
     projectStore: projectStoreDeps,
   });
-  registerElmRoutes(app, { runtimeDataDir: RUNTIME_DATA_DIR });
+  registerElmRoutes(app, { runtimeDataDir: RUNTIME_DATA_DIR, projectsDir: PROJECTS_DIR });
   app.use('/artifacts', express.static(ARTIFACTS_DIR));
   registerDeployRoutes(app, {
     db,

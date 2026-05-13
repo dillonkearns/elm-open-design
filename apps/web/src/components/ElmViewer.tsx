@@ -136,7 +136,6 @@ function HighlightedElm({ source }: { source: string }) {
 }
 
 export type CompileState =
-  | { kind: 'loading-source' }
   | { kind: 'compiling' }
   | { kind: 'rendered'; srcDoc: string }
   | { kind: 'error'; raw: string; structured: unknown };
@@ -150,10 +149,14 @@ interface ElmCompileResponse {
 }
 
 /**
- * Fetch an Elm source file from the project, POST it to /api/elm/compile, and
- * produce an iframe-ready `srcDoc`. Used by the full ElmViewer (preview tab)
- * and by DesignFilesPanel's right-side preview thumb so both stay in lockstep
- * with the same compile pipeline, cache, and error rendering.
+ * Trigger a multi-file Elm compile on the daemon for one of a project's `.elm`
+ * artifacts, and return an iframe-ready `srcDoc`. The daemon stages every
+ * `.elm` file in the project into a per-project workdir so sibling modules
+ * can `import` each other; the cache key incorporates the contents of every
+ * staged module, so editing a helper invalidates the entry that imports it.
+ *
+ * Also fetches the file's text so the Source tab has something to render with
+ * syntax highlighting — the daemon doesn't return it.
  */
 export function useCompiledElm(
   projectId: string,
@@ -162,32 +165,20 @@ export function useCompiledElm(
   reloadKey: number = 0,
 ): { state: CompileState; source: string | null } {
   const [source, setSource] = useState<string | null>(null);
-  const [state, setState] = useState<CompileState>({ kind: 'loading-source' });
+  const [state, setState] = useState<CompileState>({ kind: 'compiling' });
 
   useEffect(() => {
     setSource(null);
-    setState({ kind: 'loading-source' });
+    setState({ kind: 'compiling' });
     let cancelled = false;
     void fetchProjectFileText(projectId, fileName).then((text) => {
       if (!cancelled) setSource(text ?? '');
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, fileName, fileMtime, reloadKey]);
 
-  useEffect(() => {
-    if (source === null) return;
-    if (source.trim().length === 0) {
-      setState({ kind: 'error', raw: 'Empty Elm source.', structured: null });
-      return;
-    }
-    let cancelled = false;
-    setState({ kind: 'compiling' });
     fetch('/api/elm/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ projectId, fileName }),
     })
       .then(async (resp) => {
         const data = (await resp.json()) as ElmCompileResponse;
@@ -210,10 +201,11 @@ export function useCompiledElm(
           structured: null,
         });
       });
+
     return () => {
       cancelled = true;
     };
-  }, [source, fileName]);
+  }, [projectId, fileName, fileMtime, reloadKey]);
 
   return { state, source };
 }
@@ -292,9 +284,7 @@ export function ElmViewer({
               ? 'rendered'
               : state.kind === 'compiling'
                 ? 'compiling…'
-                : state.kind === 'error'
-                  ? 'error'
-                  : 'loading…'}
+                : 'error'}
           </span>
         </div>
         <div className="viewer-toolbar-actions">
@@ -358,9 +348,7 @@ export function ElmViewer({
             {formattedError ?? ''}
           </pre>
         ) : (
-          <div className="viewer-empty">
-            {state.kind === 'loading-source' ? 'Loading source…' : 'Compiling Elm…'}
-          </div>
+          <div className="viewer-empty">Compiling Elm…</div>
         )}
       </div>
     </div>
@@ -424,7 +412,7 @@ export function ElmThumb({
         fontSize: 13,
       }}
     >
-      {state.kind === 'loading-source' ? 'Loading…' : 'Compiling Elm…'}
+      Compiling Elm…
     </div>
   );
 }

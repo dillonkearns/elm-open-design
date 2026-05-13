@@ -14,25 +14,91 @@ triggers:
 
 # elm-prototype — Elm is the output medium, not HTML
 
-This skill **replaces** the base prompt's HTML output contract. For this project, every rule in the base prompt that says "HTML", "`<!doctype html>`", "complete standalone document", "`<artifact type=\"text/html\">`", "inline all CSS", or "React + Babel" is **superseded** by the rules below. Do not emit HTML. Do not emit React. Do not emit Babel. Do not write `index.html`. The deliverable is an Elm program.
+This skill **replaces** the base prompt's HTML output contract. For this project, every rule in the base prompt that says "HTML", "`<!doctype html>`", "complete standalone document", "`<artifact type=\"text/html\">`", "inline all CSS", or "React + Babel" is **superseded** by the rules below. Do not emit HTML. Do not emit React. Do not emit Babel. Do not write `index.html`. The deliverable is one or more Elm programs.
 
 If the base prompt says "produce design artifacts ... using HTML" — ignore that for this skill. The medium here is **Elm**, compiled server-side by `elm make` and rendered in a sandboxed iframe.
 
 ## Output contract — read carefully
 
-Emit exactly one artifact block at the end of your turn:
+Each artifact you emit is one Elm module that the daemon compiles and renders independently. You can emit multiple artifacts in a single turn — siblings can import each other for shared helpers.
 
 ```
 <artifact identifier="kebab-slug" type="text/elm" title="Human title">
-module Main exposing (main)
-...complete Elm program...
+module KebabSlug exposing (main)
+...complete Elm module...
 </artifact>
 ```
 
 Hard rules:
-- The block must contain a **complete, compilable** Elm program — module declaration, every import the code uses, every function it references, ending at the last line of `view`. The daemon shells out to `elm make` against this exact source; partial / placeholder Elm will fail compilation and show a red error pane to the user.
+- **Module name = PascalCase of the artifact identifier.** `identifier="newsletter-signup-fancy"` → `module NewsletterSignupFancy exposing (...)`. The daemon stages your artifact into `src/NewsletterSignupFancy.elm` before compiling, so a mismatched module name is a compile error.
+- **Every module has a `main`.** Even helper modules (whose primary purpose is to expose `view`, `card`, etc. for other modules to import) MUST define `main` that demos the helper with sample data. The viewer renders every module by previewing its `main`. There are no "non-previewable" modules.
+- The block must contain a **complete, compilable** Elm module — module declaration, every import the code uses, every function it references. Partial / placeholder Elm fails compilation and shows a red error pane.
 - Do **not** wrap the artifact in markdown fences and do **not** add prose after `</artifact>`.
 - Do **not** write `.elm` files to disk through Write/Edit tools. The artifact body is the deliverable.
+
+## Multi-artifact composition — the unfair advantage
+
+When two or more mockups share a visual element (a card, a header, a stat tile), extract it into a helper artifact and import it from each mockup. Editing the helper instantly propagates to every mockup that imports it — that's the whole point of using Elm here.
+
+### Example: a `Card` helper used by two mockups
+
+**Artifact 1** — the helper, emitted as `identifier="card"`:
+
+```elm
+module Card exposing (view)
+
+import Browser
+import Html exposing (Html, div, h2, p, text)
+import Html.Attributes exposing (class)
+
+
+view : { title : String, body : String } -> Html msg
+view config =
+    div [ class "rounded-lg bg-white p-6 shadow border border-gray-200" ]
+        [ h2 [ class "text-xl font-bold text-gray-900" ] [ text config.title ]
+        , p [ class "mt-2 text-gray-600 leading-relaxed" ] [ text config.body ]
+        ]
+
+
+main : Program () () ()
+main =
+    Browser.sandbox
+        { init = ()
+        , update = \_ _ -> ()
+        , view = \_ ->
+            div [ class "min-h-screen bg-gray-50 p-12" ]
+                [ view { title = "Card demo", body = "This is what a Card looks like." } ]
+        }
+```
+
+**Artifact 2** — a mockup importing the helper, emitted as `identifier="dashboard-overview"`:
+
+```elm
+module DashboardOverview exposing (main)
+
+import Browser
+import Card
+import Html exposing (Html, div, h1, text)
+import Html.Attributes exposing (class)
+
+
+main : Program () () ()
+main =
+    Browser.sandbox
+        { init = ()
+        , update = \_ _ -> ()
+        , view = \_ ->
+            div [ class "min-h-screen bg-gray-50 p-12" ]
+                [ h1 [ class "text-4xl font-bold text-gray-900 mb-8" ] [ text "Dashboard" ]
+                , div [ class "grid grid-cols-2 gap-6 max-w-4xl" ]
+                    [ Card.view { title = "Subscribers", body = "12,403 active accounts." }
+                    , Card.view { title = "MRR", body = "$48,210 — up 12% MoM." }
+                    ]
+                ]
+        }
+```
+
+Open `card.elm` → see the demo. Open `dashboard-overview.elm` → see the dashboard. Edit `Card.view`'s padding → both reload with the new style on next view.
 
 ## Locked package set
 
@@ -58,56 +124,11 @@ import Svg
 import Svg.Attributes
 ```
 
+When importing a sibling artifact, write `import <ModuleName>` (and `<ModuleName>.someFn` at the call site). Sibling artifacts are addressed by their PascalCase module name, not by filename or path.
+
 ## Interactivity model
 
-Always use `Browser.sandbox`. Even for static pages, keep the same skeleton — set `Msg = NoOp` and never dispatch it. Uniformity beats per-brief judgment.
-
-## Canonical skeleton — copy this verbatim, then fill `view`
-
-```elm
-module Main exposing (main)
-
-import Browser
-import Html exposing (Html, div, h1, p, text)
-import Html.Attributes exposing (class, style)
-
-
-main : Program () Model Msg
-main =
-    Browser.sandbox
-        { init = init
-        , update = update
-        , view = view
-        }
-
-
-type alias Model =
-    {}
-
-
-type Msg
-    = NoOp
-
-
-init : Model
-init =
-    {}
-
-
-update : Msg -> Model -> Model
-update _ model =
-    model
-
-
-view : Model -> Html Msg
-view _ =
-    div [ class "min-h-screen bg-gray-50 p-12" ]
-        [ h1 [ class "text-4xl font-bold text-gray-900" ] [ text "Title" ]
-        , p [ class "mt-4 text-lg text-gray-600" ] [ text "Body copy." ]
-        ]
-```
-
-For any interactive widget (a counter, a toggle, a form), add cases to `Msg`, extend `Model`, and handle them in `update`. **Do not** switch to `Browser.element` for v1.
+Use `Browser.sandbox`. Even for static pages, keep the same skeleton — set `Msg = NoOp` and never dispatch it. For helper modules whose `main` is just a demo, `Browser.sandbox { init = (), update = \_ _ -> (), view = \_ -> ... }` with the unit type for both Model and Msg is enough.
 
 ## Styling — Tailwind v2 utilities + inline `style` for custom values
 
@@ -137,21 +158,15 @@ div
 ## Workflow
 
 1. **Read `DESIGN.md`** if a design system is active — extract palette, typography, spacing intent.
-2. **Plan briefly in prose** — no TodoWrite needed for a single-file prototype.
-3. **Write the Elm program** in your response. Start from the canonical skeleton, expand `view`, add `Msg` / `Model` cases only if the brief actually needs interactivity.
-4. **Emit the artifact** as the last thing in your turn:
-
-   ```
-   <artifact identifier="..." type="text/elm" title="...">
-   module Main exposing (main)
-   ...
-   </artifact>
-   ```
+2. **Decide on shared helpers.** If the brief asks for multiple mockups that share a visual element (cards, headers, stat tiles, hero blocks), plan one helper artifact and N mockup artifacts that import it. If it's a single one-off page, skip helpers.
+3. **Write each module** as its own `<artifact>` block. Module names PascalCase, every module has a `main`.
+4. **Emit the artifacts** as the last thing in your turn — one `<artifact>...</artifact>` block per module, no prose between them, no markdown fences around them.
 
 ## What you do not do
 
 - Don't import `elm/time`, `elm/url`, `elm/random`, `elm/regex`, or any community package — they're not in the locked set.
 - Don't use ports (`port module`) — `Browser.sandbox` doesn't support them.
 - Don't emit raw HTML strings via `Html.Attributes.attribute "innerHTML"` — keep everything in typed Elm.
-- Don't ship multiple files. The artifact body IS the program.
-- Don't apologize for using Elm. Just produce a beautifully crafted page.
+- Don't omit `main` from a module, even if the module's primary purpose is to export a helper. Without `main`, the file won't preview.
+- Don't use hyphens in module names. `module Newsletter-Signup` is not valid Elm. The identifier `newsletter-signup` becomes `module NewsletterSignup`.
+- Don't apologize for using Elm. Just produce beautifully crafted pages.
