@@ -4,6 +4,7 @@ import { startServer } from './server.js';
 import { runLiveArtifactsMcpServer } from './mcp-live-artifacts-server.js';
 import { runConnectorsToolCli } from './tools-connectors-cli.js';
 import { runLiveArtifactsToolCli } from './tools-live-artifacts-cli.js';
+import { runElmCli } from './elm-cli.js';
 import { splitResearchSubcommand } from './research/cli-args.js';
 import { openBrowser } from './browser-open.js';
 
@@ -95,7 +96,17 @@ if (first && SUBCOMMAND_MAP[first]) {
   process.exit(0);
 }
 
-if (argv[0] === 'tools' && argv[1] === 'live-artifacts') {
+if (argv[0] === 'elm') {
+  runElmCli(argv.slice(1))
+    .then(({ exitCode }) => {
+      process.exitCode = exitCode;
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stderr.write(`elm cli failed: ${message}\n`);
+      process.exitCode = 1;
+    });
+} else if (argv[0] === 'tools' && argv[1] === 'live-artifacts') {
   runLiveArtifactsToolCli(argv.slice(2))
     .then(({ exitCode }) => {
       process.exitCode = exitCode;
@@ -195,6 +206,11 @@ function printRootHelp() {
 
   od research search --query <text> [--max-sources 5] [--daemon-url <url>]
       Run agent-callable Tavily research through the local daemon.
+
+  od elm check <drafts-dir> <entry-file>
+      Pre-validate Elm artifact drafts against the active project.
+      Designed to be invoked by a code agent — picks up OD_DAEMON_URL and
+      OD_PROJECT_ID from the env that the daemon injected on spawn.
 
   "$OD_NODE_BIN" "$OD_BIN" tools ...
       Recommended agent-runtime form; avoids relying on user PATH for od or node.

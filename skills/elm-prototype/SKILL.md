@@ -34,7 +34,7 @@ Hard rules:
 - **Every module has a `main`.** Even helper modules (whose primary purpose is to expose `view`, `card`, etc. for other modules to import) MUST define `main` that demos the helper with sample data. The viewer renders every module by previewing its `main`. There are no "non-previewable" modules.
 - The block must contain a **complete, compilable** Elm module — module declaration, every import the code uses, every function it references. Partial / placeholder Elm fails compilation and shows a red error pane.
 - Do **not** wrap the artifact in markdown fences and do **not** add prose after `</artifact>`.
-- Do **not** write `.elm` files to disk through Write/Edit tools. The artifact body is the deliverable.
+- Drafts live under `.elm-drafts/` only — your project CWD is already inside `.od/` so anything you write there is gitignored automatically. The `<artifact>` block is still the canonical persisted output; Write/Edit to anywhere else in the project root will create stray files alongside the artifact-persisted ones.
 
 ## Multi-artifact composition — the unfair advantage
 
@@ -159,8 +159,37 @@ div
 
 1. **Read `DESIGN.md`** if a design system is active — extract palette, typography, spacing intent.
 2. **Decide on shared helpers.** If the brief asks for multiple mockups that share a visual element (cards, headers, stat tiles, hero blocks), plan one helper artifact and N mockup artifacts that import it. If it's a single one-off page, skip helpers.
-3. **Write each module** as its own `<artifact>` block. Module names PascalCase, every module has a `main`.
-4. **Emit the artifacts** as the last thing in your turn — one `<artifact>...</artifact>` block per module, no prose between them, no markdown fences around them.
+3. **Draft each module** to scratch files first.
+4. **Validate via the compile loop** (see below). Iterate until clean.
+5. **Emit the artifacts** as the last thing in your turn — one `<artifact>...</artifact>` block per module, no prose between them, no markdown fences around them.
+
+## Validate before you emit — non-negotiable
+
+Elm's compiler is the killer feature here. **Use it.** Before any `<artifact>` block lands in the chat, every draft must pass `elm make`. The user sees compile errors as a red pane; shipping known-broken Elm wastes their turn.
+
+The loop:
+
+1. Create a drafts directory: `mkdir -p .elm-drafts`
+2. Write each draft module to `.elm-drafts/<kebab-identifier>.elm` via the Write tool. **One file per module you plan to emit.** Filenames must match what you'll use in the `<artifact identifier=...>` attribute (kebab-case, `.elm` extension).
+3. For each entry module you plan to emit, run:
+
+   ```bash
+   "$OD_NODE_BIN" "$OD_BIN" elm check .elm-drafts <entry-filename>.elm
+   ```
+
+   For example, after drafting `card.elm` and `dashboard.elm` where `dashboard.elm` imports `Card`:
+
+   ```bash
+   "$OD_NODE_BIN" "$OD_BIN" elm check .elm-drafts card.elm
+   "$OD_NODE_BIN" "$OD_BIN" elm check .elm-drafts dashboard.elm
+   ```
+
+4. **Read every line of stderr** when the check fails. Elm's errors are precise: file, line, column, what was expected, often a `Hint` with a fix suggestion. Use the Edit tool to revise the draft file, then re-run `elm check` on that entry.
+5. Repeat until every entry exits 0. Then emit the `<artifact>` blocks.
+
+`elm check` stages your drafts against the project's existing on-disk siblings, so imports across drafts type-check the same way they will after you emit. It does not persist the drafts — only `<artifact>` blocks persist.
+
+If you've iterated 4+ times on the same compile error without progress, stop and emit the artifact anyway. Tell the user honestly in your accompanying prose: "I couldn't get past <specific error>." Don't loop forever.
 
 ## What you do not do
 
