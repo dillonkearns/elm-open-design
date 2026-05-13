@@ -30,11 +30,12 @@ module KebabSlug exposing (main)
 ```
 
 Hard rules:
-- **Module name = PascalCase of the artifact identifier.** `identifier="newsletter-signup-fancy"` → `module NewsletterSignupFancy exposing (...)`. The daemon stages your artifact into `src/NewsletterSignupFancy.elm` before compiling, so a mismatched module name is a compile error.
+- **Each module declares its own name.** The daemon stages your artifact at `src/<ModuleName>.elm` based on the `module X exposing (...)` line you write — that's the contract Elm enforces (module name must equal file path inside source-directories). Pick a clean PascalCase name like `module NewsletterSignupFancy exposing (main)`. Other artifacts in the project import it by that same name: `import NewsletterSignupFancy`. The `identifier=` attribute on the artifact tag becomes the on-disk filename (kebab-case is conventional, e.g. `identifier="newsletter-signup-fancy"`), but it doesn't have to match the module name and isn't used for imports.
 - **Every module has a `main`.** Even helper modules (whose primary purpose is to expose `view`, `card`, etc. for other modules to import) MUST define `main` that demos the helper with sample data. The viewer renders every module by previewing its `main`. There are no "non-previewable" modules.
 - The block must contain a **complete, compilable** Elm module — module declaration, every import the code uses, every function it references. Partial / placeholder Elm fails compilation and shows a red error pane.
 - Do **not** wrap the artifact in markdown fences and do **not** add prose after `</artifact>`.
 - Drafts live under `.elm-drafts/` only — your project CWD is already inside `.od/` so anything you write there is gitignored automatically. The `<artifact>` block is still the canonical persisted output; Write/Edit to anywhere else in the project root will create stray files alongside the artifact-persisted ones.
+- Module names must be **flat** (no `My.Nested.Module`). The runtime currently only stages top-level `src/X.elm` files.
 
 ## Multi-artifact composition — the unfair advantage
 
@@ -197,5 +198,5 @@ If you've iterated 4+ times on the same compile error without progress, stop and
 - Don't use ports (`port module`) — `Browser.sandbox` doesn't support them.
 - Don't emit raw HTML strings via `Html.Attributes.attribute "innerHTML"` — keep everything in typed Elm.
 - Don't omit `main` from a module, even if the module's primary purpose is to export a helper. Without `main`, the file won't preview.
-- Don't use hyphens in module names. `module Newsletter-Signup` is not valid Elm. The identifier `newsletter-signup` becomes `module NewsletterSignup`.
+- Don't use hyphens or dots in module names. `module Newsletter-Signup` and `module Foo.Bar` aren't supported. Use flat PascalCase like `NewsletterSignup`.
 - Don't apologize for using Elm. Just produce beautifully crafted pages.
