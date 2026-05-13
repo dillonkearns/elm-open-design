@@ -214,9 +214,12 @@ const TAILWIND_CDN_URL = 'https://unpkg.com/tailwindcss@2.2.19/dist/tailwind.min
 
 function buildIframeShell(compiledJs: string, title: string): string {
   // Sandboxed iframe: minimal HTML around the compiled Elm program. The
-  // compiled Elm bundle defines a global `Elm` object and we mount Main into
-  // the #root div. Tailwind v2 ships as a single pre-built stylesheet so
-  // utility classes the agent emits resolve without a JIT step.
+  // compiled Elm bundle exposes its entry module on the global `Elm` object
+  // keyed by module name (e.g. `Elm.DocsRendererDirections2`). Since
+  // `elm make src/<Entry>.elm` only emits one entry module per compile, we
+  // pick whichever key shows up — that keeps the shell agnostic to the
+  // agent's PascalCase module names. Tailwind v2 ships as a single
+  // pre-built stylesheet so utility classes resolve without a JIT step.
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -231,7 +234,9 @@ function buildIframeShell(compiledJs: string, title: string): string {
   <script>${compiledJs}</script>
   <script>
     try {
-      var app = Elm.Main.init({ node: document.getElementById('root') });
+      var keys = typeof Elm === 'object' && Elm ? Object.keys(Elm) : [];
+      if (keys.length === 0) throw new Error('Compiled bundle exposed no Elm modules.');
+      Elm[keys[0]].init({ node: document.getElementById('root') });
     } catch (err) {
       document.getElementById('root').innerHTML =
         '<pre style="padding:24px;color:#b00;font-family:ui-monospace,monospace;white-space:pre-wrap;">' +
